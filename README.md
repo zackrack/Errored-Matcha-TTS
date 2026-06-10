@@ -59,6 +59,16 @@ cd Matcha-TTS
 pip install -e .
 ```
 
+### Stage 0.5 smoke test
+
+After cloning and installing from source, run the Stage 0.5 smoke test to verify that Matcha-TTS can synthesize one WAV file:
+
+```bash
+python stage_05.py --cpu
+```
+
+The first run downloads the public Matcha-TTS checkpoint and vocoder, then writes audio into `stage_05_outputs/`.
+
 3. Run CLI / gradio app / jupyter notebook
 
 ```bash
