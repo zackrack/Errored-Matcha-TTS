@@ -22,6 +22,7 @@ from tqdm.auto import tqdm
 from matcha.cli import get_device
 from matcha.data.text_mel_datamodule import TextMelDataModule
 from matcha.models.matcha_tts import MatchaTTS
+from matcha.utils.checkpoints import load_lightning_checkpoint_trusted
 from matcha.utils.logging_utils import pylogger
 from matcha.utils.utils import get_phoneme_durations
 
@@ -158,7 +159,7 @@ def main():
     print(f"Preprocessing: {cfg['name']} from training filelist: {cfg['train_filelist_path']}")
     print("Loading model...")
     device = get_device(args)
-    model = MatchaTTS.load_from_checkpoint(args.checkpoint_path, map_location=device)
+    model = load_lightning_checkpoint_trusted(MatchaTTS, args.checkpoint_path, map_location=device)
 
     text_mel_datamodule = TextMelDataModule(**cfg)
     text_mel_datamodule.setup()
