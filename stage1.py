@@ -223,15 +223,16 @@ def synthesize_from_phones(args: argparse.Namespace) -> Path:
     model = load_matcha(args.model if args.checkpoint_path is None else "custom_model", matcha_path, device)
     vocoder, denoiser = load_vocoder(args.vocoder, vocoder_path, device)
 
-    output = model.synthesise(
-        x,
-        x_lengths,
-        n_timesteps=args.steps,
-        temperature=args.temperature,
-        spks=spk,
-        length_scale=args.speaking_rate,
-    )
-    waveform = to_waveform(output["mel"], vocoder, denoiser, args.denoiser_strength)
+    with torch.inference_mode():
+        output = model.synthesise(
+            x,
+            x_lengths,
+            n_timesteps=args.steps,
+            temperature=args.temperature,
+            spks=spk,
+            length_scale=args.speaking_rate,
+        )
+        waveform = to_waveform(output["mel"], vocoder, denoiser, args.denoiser_strength)
 
     args.output_wav.parent.mkdir(parents=True, exist_ok=True)
     sf.write(args.output_wav, waveform, 22050, "PCM_24")

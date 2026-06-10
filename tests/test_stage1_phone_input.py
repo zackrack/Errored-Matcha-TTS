@@ -1,6 +1,8 @@
+import inspect
+
 import pytest
 
-from stage1 import cleaned_text_to_ids, phones_to_cleaned_text, strip_arpabet_stress
+from stage1 import cleaned_text_to_ids, phones_to_cleaned_text, strip_arpabet_stress, synthesize_from_phones
 
 
 def test_arpabet_realized_substitution_maps_to_matcha_ipa_symbols():
@@ -43,3 +45,10 @@ def test_cleaned_text_to_ids_inserts_blank_tokens_by_default():
 def test_unknown_arpabet_phone_raises_helpful_error():
     with pytest.raises(ValueError, match="Unknown ARPAbet phone"):
         phones_to_cleaned_text("DH XX", "arpabet")
+
+
+def test_synthesis_vocoding_is_wrapped_in_inference_mode():
+    source = inspect.getsource(synthesize_from_phones)
+
+    assert "with torch.inference_mode():" in source
+    assert "waveform = to_waveform" in source
