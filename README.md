@@ -183,6 +183,51 @@ include CMUdict stress digits (`0`, `1`, `2`) on vowels when possible so Stage 1
 Substitutions, deletions, and insertions are represented by changing the realized phone sequence itself; Stage 1 does
 not require a canonical phone sequence or equal canonical/realized lengths.
 
+### Stage 2 realized-phone training dataset
+
+Stage 2 adds training-data support for the PED-TTS realized-phone-only baseline while keeping the existing Matcha-TTS
+model architecture unchanged. The new datamodule reads JSONL records, converts `realized_phones` into the same
+Matcha-compatible phone IDs used by `stage1.py`, and returns the normal Matcha training batch fields (`x`, `x_lengths`,
+`y`, `y_lengths`, `spks`, and optional `durations`).
+
+Example JSONL record:
+
+```json
+{"wav":"wavs/utt_0001.wav","text":"The rabbit ran away.","canonical_phones":["DH","AH0","R","AE1","B","IH0","T","R","AE1","N","AH0","W","EY1"],"realized_phones":["DH","AH0","W","AE1","B","IH0","T","R","AE1","N","AH0","W","EY1"],"error_ops":["none","none","sub","none","none","none","none","none","none","none","none","none","none"],"speaker_id":"child_001"}
+```
+
+For Stage 2, the audio must match the realized phones. If `realized_phones` says `W AE1 B IH0 T`, the wav should
+actually contain the realized pronunciation "wabbit" rather than canonical "rabbit". Amazon Polly or another TTS system
+can be used as a synthetic bootstrap dataset for code/testing, but acted PEDBench-style or real human error-realized audio
+is the better target for a meaningful PED-TTS baseline.
+
+Create a dataset like this:
+
+```text
+data/ped_realized/
+  train.jsonl
+  valid.jsonl
+  wavs/
+    utt_0001.wav
+    utt_0002.wav
+```
+
+The default Stage 2 config expects 22,050 Hz WAV files, ARPAbet phones, and `realized_phones` as the model input field:
+
+```bash
+python matcha/train.py \
+  experiment=ped_realized_smoke \
+  data.train_filelist_path=data/ped_realized/train.jsonl \
+  data.valid_filelist_path=data/ped_realized/valid.jsonl
+```
+
+For quick parser/batching checks without a full training run, run the Stage 2 unit tests:
+
+```bash
+pytest tests/test_ped_datamodule.py -q
+```
+
+
 3. Run CLI / gradio app / jupyter notebook
 
 ```bash
