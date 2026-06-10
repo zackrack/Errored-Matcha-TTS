@@ -1,6 +1,8 @@
 from pathlib import Path
 
-import torch
+import pytest
+
+torch = pytest.importorskip("torch")
 
 from matcha.utils.checkpoints import load_lightning_checkpoint_trusted, torch_load_trusted
 

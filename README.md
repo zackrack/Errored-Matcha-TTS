@@ -131,6 +131,44 @@ python stage_05.py --help
 - If the command fails before synthesis, install dependencies first with `python -m pip install -e .` and confirm that the system phonemizer dependency is available.
 - If you see a PyTorch 2.6+ error beginning with `Weights only load failed`, pull the latest checkout and rerun `python -m pip install -e .`; this repo loads the trusted Matcha-TTS checkpoints with `weights_only=False` for compatibility with the public Lightning checkpoints.
 
+### Stage 1 explicit-phone inference prototype
+
+`stage1.py` is the first PED-TTS research prototype. It bypasses Matcha-TTS G2P and synthesizes directly
+from an explicit realized-phone sequence. This is still a no-training prototype: ARPAbet phones are converted into
+the current pretrained Matcha-TTS IPA-symbol vocabulary.
+
+```bash
+# Example: realized "wabbit" pronunciation instead of canonical "rabbit"
+python stage1.py \
+  --phones "DH AH W AE B IH T R AE N AH W EY" \
+  --phone_format arpabet \
+  --cpu \
+  --output_wav stage1_outputs/wabbit.wav
+```
+
+For a dependency-light parser check that does not load the model or vocoder, add `--dry_run`:
+
+```bash
+python stage1.py \
+  --phones "DH AH W AE B IH T" \
+  --phone_format arpabet \
+  --dry_run
+```
+
+You can also pass IPA-symbol input directly:
+
+```bash
+python stage1.py \
+  --phones "ð ə w æ b ɪ t" \
+  --phone_format ipa \
+  --cpu \
+  --output_wav stage1_outputs/wabbit_ipa.wav
+```
+
+Use `|`, `/`, `SP`, `SPACE`, `PAUSE`, or `SIL` as word-boundary/pause tokens. Substitutions, deletions, and
+insertions are represented by changing the realized phone sequence itself; Stage 1 does not require a canonical
+phone sequence or equal canonical/realized lengths.
+
 3. Run CLI / gradio app / jupyter notebook
 
 ```bash
