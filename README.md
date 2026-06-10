@@ -59,6 +59,204 @@ cd Matcha-TTS
 pip install -e .
 ```
 
+### Stage 0.5 smoke test
+
+Use `stage_05.py` after a fresh clone to verify that the editable install, CLI entry point, model download, vocoder download, phonemizer, and WAV writing path all work end-to-end.
+
+#### Fresh clone and install
+
+```bash
+# 1. Clone this fork and enter the repo
+git clone <YOUR_FORK_OR_REPO_URL> Matcha-TTS
+cd Matcha-TTS
+
+# 2. Create and activate a Python environment
+conda create -n matcha-tts python=3.10 -y
+conda activate matcha-tts
+
+# 3. Install system phonemizer dependency
+# Ubuntu/Debian:
+sudo apt-get update && sudo apt-get install -y espeak-ng
+# macOS with Homebrew:
+# brew install espeak
+
+# 4. Install Matcha-TTS from the clone
+python -m pip install --upgrade pip setuptools wheel
+python -m pip install -e .
+```
+
+Windows users can use PowerShell with a virtual environment instead of conda:
+
+```powershell
+py -3.10 -m venv venv
+.\venv\Scripts\Activate.ps1
+python -m pip install --upgrade pip setuptools wheel
+python -m pip install -e .
+```
+
+If you previously installed the package before pulling this change, rerun `python -m pip install -e .` from the repo root so the `matcha-tts` and `matcha-tts-app` console scripts import the updated checkout.
+
+#### Run the smoke test
+
+```bash
+python stage_05.py --cpu
+```
+
+The first run downloads the public Matcha-TTS checkpoint and vocoder, then writes audio into `stage_05_outputs/`. A successful run ends with a message like:
+
+```text
+[stage 0.5] Success. Generated audio: /absolute/path/to/stage_05_outputs/utterance_001.wav
+```
+
+#### Optional smoke-test variants
+
+```bash
+# Use fewer ODE steps for a faster smoke test
+python stage_05.py --cpu --steps 1
+
+# Write to a custom output directory
+python stage_05.py --cpu --output_dir /tmp/matcha_stage_05
+
+# Use custom text
+python stage_05.py --cpu --text "Matcha T T S is installed correctly."
+
+# Show all available options
+python stage_05.py --help
+```
+
+#### What this test checks
+
+- `stage_05.py` can invoke `matcha-tts` if the console script is installed, or fall back to `python -m matcha.cli` when running directly from the clone.
+- Matcha-TTS can phonemize the input text, load the model and vocoder, synthesize a mel spectrogram, vocode it, and write at least one `.wav` file.
+- If the command fails before synthesis, install dependencies first with `python -m pip install -e .` and confirm that the system phonemizer dependency is available.
+- If you see a PyTorch 2.6+ error beginning with `Weights only load failed`, pull the latest checkout and rerun `python -m pip install -e .`; this repo loads the trusted Matcha-TTS checkpoints with `weights_only=False` for compatibility with the public Lightning checkpoints.
+
+### Stage 1 explicit-phone inference prototype
+
+`stage1.py` is the first PED-TTS research prototype. It bypasses Matcha-TTS G2P and synthesizes directly
+from an explicit realized-phone sequence. This is still a no-training prototype: ARPAbet phones are converted into
+the current pretrained Matcha-TTS IPA-symbol vocabulary.
+
+```bash
+# Example: realized "wabbit" pronunciation instead of canonical "rabbit".
+# Use CMUdict stress digits and word-boundary tokens for sentence-like prosody.
+python stage1.py \
+  --phones "DH AH0 | W AE1 B IH0 T | R AE1 N | AH0 W EY1" \
+  --phone_format arpabet \
+  --cpu \
+  --output_wav stage1_outputs/wabbit.wav
+```
+
+You can also pass one quoted phone sequence per word with `--phone_words`; Stage 1 inserts word boundaries between
+entries:
+
+```bash
+python stage1.py \
+  --phone_words "DH AH0" "W AE1 B IH0 T" "R AE1 N" "AH0 W EY1" \
+  --phone_format arpabet \
+  --cpu \
+  --output_wav stage1_outputs/wabbit_words.wav
+```
+
+For a dependency-light parser check that does not load the model or vocoder, add `--dry_run`:
+
+```bash
+python stage1.py \
+  --phone_words "DH AH0" "W AE1 B IH0 T" \
+  --phone_format arpabet \
+  --dry_run
+```
+
+You can also pass IPA-symbol input directly:
+
+```bash
+python stage1.py \
+  --phones "ð ə w æ b ɪ t" \
+  --phone_format ipa \
+  --cpu \
+  --output_wav stage1_outputs/wabbit_ipa.wav
+```
+
+If you omit word boundaries, Stage 1 treats the whole phone sequence like one long word, which can sound too fast.
+Use `|`, `/`, `SP`, `SPACE`, `PAUSE`, or `SIL` as word-boundary/pause tokens, or use `--phone_words`. For ARPAbet,
+include CMUdict stress digits (`0`, `1`, `2`) on vowels when possible so Stage 1 can emit IPA stress marks.
+Substitutions, deletions, and insertions are represented by changing the realized phone sequence itself; Stage 1 does
+not require a canonical phone sequence or equal canonical/realized lengths.
+
+### Stage 2 realized-phone training dataset
+
+Stage 2 adds training-data support for the PED-TTS realized-phone-only baseline while keeping the existing Matcha-TTS
+model architecture unchanged. The new datamodule reads JSONL records or JSON-array manifests, converts `realized_phones` into the same
+Matcha-compatible phone IDs used by `stage1.py`, and returns the normal Matcha training batch fields (`x`, `x_lengths`,
+`y`, `y_lengths`, `spks`, and optional `durations`).
+
+Example JSONL record:
+
+```json
+{"wav":"wavs/utt_0001.wav","text":"The rabbit ran away.","canonical_phones":["DH","AH0","R","AE1","B","IH0","T","R","AE1","N","AH0","W","EY1"],"realized_phones":["DH","AH0","W","AE1","B","IH0","T","R","AE1","N","AH0","W","EY1"],"error_ops":["none","none","sub","none","none","none","none","none","none","none","none","none","none"],"speaker_id":"child_001"}
+```
+
+For Stage 2, the audio must match the realized phones. If `realized_phones` says `W AE1 B IH0 T`, the wav should
+actually contain the realized pronunciation "wabbit" rather than canonical "rabbit". Amazon Polly or another TTS system
+can be used as a synthetic bootstrap dataset for code/testing, but acted PEDBench-style or real human error-realized audio
+is the better target for a meaningful PED-TTS baseline.
+
+For the Polly-style synthetic sentence manifests used in this branch, use `phone_format: ssml_ipa` and `phone_field: ssml`.
+Those records can be a JSON array or JSONL, and may look like this:
+
+```json
+{
+  "utt_id": "apple__sub_ae_to_aa_0",
+  "word": "apple",
+  "variant": "sub_ae_to_aa_0",
+  "surface_ipa": "ˈɑpəl",
+  "canonical_ipa": "ˈæpəl",
+  "sentence": "I ate a red apple today.",
+  "ssml": "<speak>I ate a red <phoneme alphabet=\"ipa\" ph=\"ˈɑpəl\">apple</phoneme> today.</speak>",
+  "wav": "audio_sentence/apple__sub_ae_to_aa_0__sentence.wav"
+}
+```
+
+In this SSML mode, the dataloader phonemizes ordinary text outside `<phoneme>` tags and inserts the tag's `ph` IPA value
+directly. That is important for sentence audio: using only `surface_ipa` would describe just the target word, while the wav
+contains the whole sentence.
+
+Create a dataset like this:
+
+```text
+data/ped_realized/
+  train.jsonl
+  valid.jsonl
+  wavs/
+    utt_0001.wav
+    utt_0002.wav
+```
+
+The default Stage 2 config expects 22,050 Hz WAV files, ARPAbet phones, and `realized_phones` as the model input field:
+
+```bash
+python matcha/train.py \
+  experiment=ped_realized_smoke \
+  data.train_filelist_path=data/ped_realized/train.jsonl \
+  data.valid_filelist_path=data/ped_realized/valid.jsonl
+```
+
+For the Polly-style SSML manifest above, use the synthetic SSML smoke config instead:
+
+```bash
+python matcha/train.py \
+  experiment=ped_synthetic_ssml_smoke \
+  data.train_filelist_path=data/ped_synthetic/train.json \
+  data.valid_filelist_path=data/ped_synthetic/valid.json
+```
+
+For quick parser/batching checks without a full training run, run the Stage 2 unit tests:
+
+```bash
+pytest tests/test_ped_datamodule.py -q
+```
+
+
 3. Run CLI / gradio app / jupyter notebook
 
 ```bash

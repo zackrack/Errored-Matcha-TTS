@@ -1,0 +1,23 @@
+_target_: matcha.data.ped_text_mel_datamodule.PEDTextMelDataModule
+name: ped_synthetic_ssml
+train_filelist_path: data/ped_synthetic/train.json
+valid_filelist_path: data/ped_synthetic/valid.json
+batch_size: 2
+num_workers: 0
+pin_memory: false
+phone_format: ssml_ipa
+phone_field: ssml
+add_blank: true
+n_spks: 1
+n_fft: 1024
+n_feats: 80
+sample_rate: 22050
+hop_length: 256
+win_length: 1024
+f_min: 0
+f_max: 8000
+data_statistics:
+  mel_mean: 0.0
+  mel_std: 1.0
+seed: ${seed}
+load_durations: false

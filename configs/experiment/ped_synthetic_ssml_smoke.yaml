@@ -1,0 +1,31 @@
+# @package _global_
+
+# Tiny Stage 2 smoke run for Polly-style synthetic manifests with sentence-level SSML.
+# Example:
+# python matcha/train.py experiment=ped_synthetic_ssml_smoke data.train_filelist_path=/path/to/train.json data.valid_filelist_path=/path/to/valid.json
+
+defaults:
+  - override /data: ped_synthetic_ssml.yaml
+  - override /trainer: cpu.yaml
+  - override /logger: csv.yaml
+  - override /callbacks: none.yaml
+
+tags: ["ped", "synthetic", "ssml", "stage2", "smoke"]
+run_name: ped_synthetic_ssml_smoke
+
+test: false
+
+trainer:
+  max_steps: 1
+  limit_train_batches: 1
+  limit_val_batches: 1
+  accelerator: cpu
+  devices: 1
+
+model:
+  out_size: null
+
+data:
+  batch_size: 1
+  num_workers: 0
+  pin_memory: false

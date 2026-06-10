@@ -1,0 +1,31 @@
+# @package _global_
+
+# Tiny Stage 2 realized-phone-only smoke run.
+# Example:
+# python matcha/train.py experiment=ped_realized_smoke data.train_filelist_path=/path/to/train.jsonl data.valid_filelist_path=/path/to/valid.jsonl
+
+defaults:
+  - override /data: ped_realized.yaml
+  - override /trainer: cpu.yaml
+  - override /logger: csv.yaml
+  - override /callbacks: none.yaml
+
+tags: ["ped", "realized-only", "stage2", "smoke"]
+run_name: ped_realized_smoke
+
+test: false
+
+trainer:
+  max_steps: 1
+  limit_train_batches: 1
+  limit_val_batches: 1
+  accelerator: cpu
+  devices: 1
+
+model:
+  out_size: null
+
+data:
+  batch_size: 1
+  num_workers: 0
+  pin_memory: false
