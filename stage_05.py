@@ -118,7 +118,12 @@ def main() -> int:
     if completed.returncode != 0:
         print(f"[stage 0.5] Matcha-TTS failed with exit code {completed.returncode}.", file=sys.stderr)
         print(
-            "[stage 0.5] If this is a fresh clone, install dependencies first with `pip install -e .`.",
+            "[stage 0.5] If this is a fresh clone, install dependencies first with `python -m pip install -e .`.",
+            file=sys.stderr,
+        )
+        print(
+            "[stage 0.5] If dependencies are installed, reinstall this checkout so the console script uses "
+            "the latest code. PyTorch 2.6+ requires the trusted-checkpoint loading fix in this repo.",
             file=sys.stderr,
         )
         return completed.returncode

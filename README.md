@@ -61,13 +61,75 @@ pip install -e .
 
 ### Stage 0.5 smoke test
 
-After cloning and installing from source, run the Stage 0.5 smoke test to verify that Matcha-TTS can synthesize one WAV file:
+Use `stage_05.py` after a fresh clone to verify that the editable install, CLI entry point, model download, vocoder download, phonemizer, and WAV writing path all work end-to-end.
+
+#### Fresh clone and install
+
+```bash
+# 1. Clone this fork and enter the repo
+git clone <YOUR_FORK_OR_REPO_URL> Matcha-TTS
+cd Matcha-TTS
+
+# 2. Create and activate a Python environment
+conda create -n matcha-tts python=3.10 -y
+conda activate matcha-tts
+
+# 3. Install system phonemizer dependency
+# Ubuntu/Debian:
+sudo apt-get update && sudo apt-get install -y espeak-ng
+# macOS with Homebrew:
+# brew install espeak
+
+# 4. Install Matcha-TTS from the clone
+python -m pip install --upgrade pip setuptools wheel
+python -m pip install -e .
+```
+
+Windows users can use PowerShell with a virtual environment instead of conda:
+
+```powershell
+py -3.10 -m venv venv
+.\venv\Scripts\Activate.ps1
+python -m pip install --upgrade pip setuptools wheel
+python -m pip install -e .
+```
+
+If you previously installed the package before pulling this change, rerun `python -m pip install -e .` from the repo root so the `matcha-tts` and `matcha-tts-app` console scripts import the updated checkout.
+
+#### Run the smoke test
 
 ```bash
 python stage_05.py --cpu
 ```
 
-The first run downloads the public Matcha-TTS checkpoint and vocoder, then writes audio into `stage_05_outputs/`.
+The first run downloads the public Matcha-TTS checkpoint and vocoder, then writes audio into `stage_05_outputs/`. A successful run ends with a message like:
+
+```text
+[stage 0.5] Success. Generated audio: /absolute/path/to/stage_05_outputs/utterance_001.wav
+```
+
+#### Optional smoke-test variants
+
+```bash
+# Use fewer ODE steps for a faster smoke test
+python stage_05.py --cpu --steps 1
+
+# Write to a custom output directory
+python stage_05.py --cpu --output_dir /tmp/matcha_stage_05
+
+# Use custom text
+python stage_05.py --cpu --text "Matcha T T S is installed correctly."
+
+# Show all available options
+python stage_05.py --help
+```
+
+#### What this test checks
+
+- `stage_05.py` can invoke `matcha-tts` if the console script is installed, or fall back to `python -m matcha.cli` when running directly from the clone.
+- Matcha-TTS can phonemize the input text, load the model and vocoder, synthesize a mel spectrogram, vocode it, and write at least one `.wav` file.
+- If the command fails before synthesis, install dependencies first with `python -m pip install -e .` and confirm that the system phonemizer dependency is available.
+- If you see a PyTorch 2.6+ error beginning with `Weights only load failed`, pull the latest checkout and rerun `python -m pip install -e .`; this repo loads the trusted Matcha-TTS checkpoints with `weights_only=False` for compatibility with the public Lightning checkpoints.
 
 3. Run CLI / gradio app / jupyter notebook
 
