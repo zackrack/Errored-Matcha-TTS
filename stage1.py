@@ -56,6 +56,23 @@ ARPABET_TO_IPA = {
     "ZH": "ʒ",
 }
 
+VOWEL_ARPABET = {
+    "AA",
+    "AE",
+    "AH",
+    "AO",
+    "AW",
+    "AY",
+    "EH",
+    "ER",
+    "EY",
+    "IH",
+    "IY",
+    "OW",
+    "OY",
+    "UH",
+    "UW",
+}
 WORD_BOUNDARY_TOKENS = {"|", "/", "SP", "SPACE", "PAUSE", "SIL"}
 PUNCTUATION_TOKENS = {".", ",", "!", "?", ";", ":"}
 _STRESS_RE = re.compile(r"[0-2]$")
@@ -74,6 +91,27 @@ def get_matcha_symbols() -> list[str]:
 def strip_arpabet_stress(phone: str) -> str:
     """Remove CMUdict-style stress digits from an ARPAbet phone token."""
     return _STRESS_RE.sub("", phone.upper())
+
+
+def get_arpabet_stress(phone: str) -> str | None:
+    """Return a CMUdict-style stress digit if one is present."""
+    phone = phone.strip()
+    return phone[-1] if phone and phone[-1] in {"0", "1", "2"} else None
+
+
+def arpabet_phone_to_ipa(phone: str) -> str | None:
+    """Convert one ARPAbet token to IPA, preserving primary/secondary stress."""
+    base_phone = strip_arpabet_stress(phone)
+    ipa = ARPABET_TO_IPA.get(base_phone)
+    if ipa is None:
+        return None
+
+    stress = get_arpabet_stress(phone)
+    if base_phone in VOWEL_ARPABET and stress == "1":
+        return f"ˈ{ipa}"
+    if base_phone in VOWEL_ARPABET and stress == "2":
+        return f"ˌ{ipa}"
+    return ipa
 
 
 def tokenize_phones(phones: str) -> list[str]:
@@ -95,9 +133,9 @@ def phones_to_cleaned_text(phones: str, phone_format: str) -> str:
         elif token in PUNCTUATION_TOKENS:
             pieces.append(token)
         elif phone_format == "arpabet":
-            phone = strip_arpabet_stress(token)
-            if phone in ARPABET_TO_IPA:
-                pieces.append(ARPABET_TO_IPA[phone])
+            ipa_phone = arpabet_phone_to_ipa(token)
+            if ipa_phone is not None:
+                pieces.append(ipa_phone)
             else:
                 unknown_phones.append(token)
         else:
@@ -139,9 +177,11 @@ def cleaned_text_to_ids(cleaned_text: str, add_blank: bool = True) -> list[int]:
 
 
 def read_phone_input(args: argparse.Namespace) -> str:
-    """Read phones from --phones or --phones_file."""
+    """Read phones from --phones, --phones_file, or --phone_words."""
     if args.phones is not None:
         return args.phones
+    if args.phone_words is not None:
+        return " | ".join(args.phone_words)
     return Path(args.phones_file).read_text(encoding="utf-8").strip()
 
 
@@ -152,6 +192,11 @@ def build_arg_parser() -> argparse.ArgumentParser:
     phone_source = parser.add_mutually_exclusive_group(required=True)
     phone_source.add_argument("--phones", type=str, help="Explicit phone sequence to synthesize.")
     phone_source.add_argument("--phones_file", type=str, help="File containing an explicit phone sequence.")
+    phone_source.add_argument(
+        "--phone_words",
+        nargs="+",
+        help="One quoted phone sequence per word; Stage 1 inserts word boundaries between entries.",
+    )
     parser.add_argument(
         "--phone_format",
         choices=("arpabet", "ipa"),

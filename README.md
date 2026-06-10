@@ -138,19 +138,31 @@ from an explicit realized-phone sequence. This is still a no-training prototype:
 the current pretrained Matcha-TTS IPA-symbol vocabulary.
 
 ```bash
-# Example: realized "wabbit" pronunciation instead of canonical "rabbit"
+# Example: realized "wabbit" pronunciation instead of canonical "rabbit".
+# Use CMUdict stress digits and word-boundary tokens for sentence-like prosody.
 python stage1.py \
-  --phones "DH AH W AE B IH T R AE N AH W EY" \
+  --phones "DH AH0 | W AE1 B IH0 T | R AE1 N | AH0 W EY1" \
   --phone_format arpabet \
   --cpu \
   --output_wav stage1_outputs/wabbit.wav
+```
+
+You can also pass one quoted phone sequence per word with `--phone_words`; Stage 1 inserts word boundaries between
+entries:
+
+```bash
+python stage1.py \
+  --phone_words "DH AH0" "W AE1 B IH0 T" "R AE1 N" "AH0 W EY1" \
+  --phone_format arpabet \
+  --cpu \
+  --output_wav stage1_outputs/wabbit_words.wav
 ```
 
 For a dependency-light parser check that does not load the model or vocoder, add `--dry_run`:
 
 ```bash
 python stage1.py \
-  --phones "DH AH W AE B IH T" \
+  --phone_words "DH AH0" "W AE1 B IH0 T" \
   --phone_format arpabet \
   --dry_run
 ```
@@ -165,9 +177,11 @@ python stage1.py \
   --output_wav stage1_outputs/wabbit_ipa.wav
 ```
 
-Use `|`, `/`, `SP`, `SPACE`, `PAUSE`, or `SIL` as word-boundary/pause tokens. Substitutions, deletions, and
-insertions are represented by changing the realized phone sequence itself; Stage 1 does not require a canonical
-phone sequence or equal canonical/realized lengths.
+If you omit word boundaries, Stage 1 treats the whole phone sequence like one long word, which can sound too fast.
+Use `|`, `/`, `SP`, `SPACE`, `PAUSE`, or `SIL` as word-boundary/pause tokens, or use `--phone_words`. For ARPAbet,
+include CMUdict stress digits (`0`, `1`, `2`) on vowels when possible so Stage 1 can emit IPA stress marks.
+Substitutions, deletions, and insertions are represented by changing the realized phone sequence itself; Stage 1 does
+not require a canonical phone sequence or equal canonical/realized lengths.
 
 3. Run CLI / gradio app / jupyter notebook
 

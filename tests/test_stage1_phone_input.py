@@ -1,8 +1,16 @@
+import argparse
 import inspect
 
 import pytest
 
-from stage1 import cleaned_text_to_ids, phones_to_cleaned_text, strip_arpabet_stress, synthesize_from_phones
+from stage1 import (
+    arpabet_phone_to_ipa,
+    cleaned_text_to_ids,
+    phones_to_cleaned_text,
+    read_phone_input,
+    strip_arpabet_stress,
+    synthesize_from_phones,
+)
 
 
 def test_arpabet_realized_substitution_maps_to_matcha_ipa_symbols():
@@ -20,13 +28,30 @@ def test_arpabet_supports_different_lengths_for_deletions_and_insertions():
     assert len(insertion) > len(canonical)
 
 
-def test_arpabet_stress_digits_are_ignored():
+def test_arpabet_stress_digits_are_available_for_base_phone_lookup():
     assert strip_arpabet_stress("AH0") == "AH"
-    assert phones_to_cleaned_text("R AE1 B IH0 T", "arpabet") == "ɹæbɪt"
+
+
+def test_arpabet_primary_and_secondary_stress_are_preserved():
+    assert arpabet_phone_to_ipa("AE1") == "ˈæ"
+    assert arpabet_phone_to_ipa("AE2") == "ˌæ"
+    assert arpabet_phone_to_ipa("AE0") == "æ"
+    assert phones_to_cleaned_text("R AE1 B IH0 T", "arpabet") == "ɹˈæbɪt"
 
 
 def test_word_boundary_tokens_become_spaces():
-    assert phones_to_cleaned_text("DH AH | R AE B IH T", "arpabet") == "ðə ɹæbɪt"
+    assert phones_to_cleaned_text("DH AH0 | R AE1 B IH0 T", "arpabet") == "ðə ɹˈæbɪt"
+
+
+def test_phone_words_insert_word_boundaries():
+    args = argparse.Namespace(
+        phones=None,
+        phones_file=None,
+        phone_words=["DH AH0", "R AE1 B IH0 T"],
+    )
+
+    assert read_phone_input(args) == "DH AH0 | R AE1 B IH0 T"
+    assert phones_to_cleaned_text(read_phone_input(args), "arpabet") == "ðə ɹˈæbɪt"
 
 
 def test_ipa_input_bypasses_arpabet_mapping():
