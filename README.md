@@ -186,7 +186,7 @@ not require a canonical phone sequence or equal canonical/realized lengths.
 ### Stage 2 realized-phone training dataset
 
 Stage 2 adds training-data support for the PED-TTS realized-phone-only baseline while keeping the existing Matcha-TTS
-model architecture unchanged. The new datamodule reads JSONL records, converts `realized_phones` into the same
+model architecture unchanged. The new datamodule reads JSONL records or JSON-array manifests, converts `realized_phones` into the same
 Matcha-compatible phone IDs used by `stage1.py`, and returns the normal Matcha training batch fields (`x`, `x_lengths`,
 `y`, `y_lengths`, `spks`, and optional `durations`).
 
@@ -200,6 +200,26 @@ For Stage 2, the audio must match the realized phones. If `realized_phones` says
 actually contain the realized pronunciation "wabbit" rather than canonical "rabbit". Amazon Polly or another TTS system
 can be used as a synthetic bootstrap dataset for code/testing, but acted PEDBench-style or real human error-realized audio
 is the better target for a meaningful PED-TTS baseline.
+
+For the Polly-style synthetic sentence manifests used in this branch, use `phone_format: ssml_ipa` and `phone_field: ssml`.
+Those records can be a JSON array or JSONL, and may look like this:
+
+```json
+{
+  "utt_id": "apple__sub_ae_to_aa_0",
+  "word": "apple",
+  "variant": "sub_ae_to_aa_0",
+  "surface_ipa": "ˈɑpəl",
+  "canonical_ipa": "ˈæpəl",
+  "sentence": "I ate a red apple today.",
+  "ssml": "<speak>I ate a red <phoneme alphabet=\"ipa\" ph=\"ˈɑpəl\">apple</phoneme> today.</speak>",
+  "wav": "audio_sentence/apple__sub_ae_to_aa_0__sentence.wav"
+}
+```
+
+In this SSML mode, the dataloader phonemizes ordinary text outside `<phoneme>` tags and inserts the tag's `ph` IPA value
+directly. That is important for sentence audio: using only `surface_ipa` would describe just the target word, while the wav
+contains the whole sentence.
 
 Create a dataset like this:
 
@@ -219,6 +239,15 @@ python matcha/train.py \
   experiment=ped_realized_smoke \
   data.train_filelist_path=data/ped_realized/train.jsonl \
   data.valid_filelist_path=data/ped_realized/valid.jsonl
+```
+
+For the Polly-style SSML manifest above, use the synthetic SSML smoke config instead:
+
+```bash
+python matcha/train.py \
+  experiment=ped_synthetic_ssml_smoke \
+  data.train_filelist_path=data/ped_synthetic/train.json \
+  data.valid_filelist_path=data/ped_synthetic/valid.json
 ```
 
 For quick parser/batching checks without a full training run, run the Stage 2 unit tests:

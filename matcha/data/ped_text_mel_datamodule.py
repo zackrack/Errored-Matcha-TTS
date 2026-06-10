@@ -21,7 +21,20 @@ from torch.utils.data import DataLoader
 
 from matcha.utils.audio import mel_spectrogram
 from matcha.utils.model import fix_len_compatibility, normalize
-from matcha.utils.phone_input import phones_to_ids
+from matcha.phone_input import phones_to_ids, ssml_to_ids
+
+
+def clean_text_segment(text: str) -> str:
+    """Phonemize ordinary text segments surrounding SSML phoneme tags."""
+    try:
+        from matcha.text.cleaners import english_cleaners2
+    except ModuleNotFoundError as exc:
+        raise ModuleNotFoundError(
+            "SSML PED manifests require the phonemizer dependencies used by english_cleaners2. "
+            "Install the project dependencies, including phonemizer/espeak, or provide explicit realized_phones instead."
+        ) from exc
+
+    return english_cleaners2(text)
 
 
 class PEDTextMelDataModule(LightningDataModule):
@@ -173,9 +186,17 @@ class PEDTextMelDataset(torch.utils.data.Dataset):
             "filepath": str(filepath),
             "x_text": cleaned_text,
             "raw_phones": raw_phones,
-            "text": record.get("text"),
-            "canonical_phones": record.get("canonical_phones"),
-            "realized_phones": record.get(self.phone_field),
+            "utt_id": record.get("utt_id"),
+            "text": record.get("text") or record.get("sentence"),
+            "word": record.get("word"),
+            "variant": record.get("variant"),
+            "surface_ipa": record.get("surface_ipa"),
+            "canonical_ipa": record.get("canonical_ipa"),
+            "ssml": record.get("ssml"),
+            "canonical_phones": record.get("canonical_phones") or record.get("canonical_ipa"),
+            "realized_phones": record.get("realized_phones")
+            or record.get("surface_ipa")
+            or record.get(self.phone_field),
             "error_ops": record.get("error_ops"),
             "durations": durations,
         }
@@ -189,10 +210,16 @@ class PEDTextMelDataset(torch.utils.data.Dataset):
 
     def get_text(self, record):
         if self.phone_field not in record:
-            raise KeyError(f"PED JSONL record is missing required phone field: {self.phone_field}")
-        token_ids, cleaned_text, raw_phones = phones_to_ids(
-            record[self.phone_field], phone_format=self.phone_format, add_blank=self.add_blank
-        )
+            raise KeyError(f"PED manifest record is missing required phone field: {self.phone_field}")
+
+        if self.phone_format == "ssml_ipa":
+            token_ids, cleaned_text, raw_phones = ssml_to_ids(
+                record[self.phone_field], text_cleaner=clean_text_segment, add_blank=self.add_blank
+            )
+        else:
+            token_ids, cleaned_text, raw_phones = phones_to_ids(
+                record[self.phone_field], phone_format=self.phone_format, add_blank=self.add_blank
+            )
         return torch.IntTensor(token_ids), cleaned_text, raw_phones
 
     def get_durations(self, filepath, text):
@@ -258,6 +285,7 @@ class PEDTextMelBatchCollate:
         spks = []
         filepaths, x_texts, raw_phones = [], [], []
         texts, canonical_phones, realized_phones, error_ops = [], [], [], []
+        utt_ids, words, variants, surface_ipa, canonical_ipa, ssml = [], [], [], [], [], []
         for i, item in enumerate(batch):
             y_, x_ = item["y"], item["x"]
             y_lengths.append(y_.shape[-1])
@@ -272,6 +300,12 @@ class PEDTextMelBatchCollate:
             canonical_phones.append(item["canonical_phones"])
             realized_phones.append(item["realized_phones"])
             error_ops.append(item["error_ops"])
+            utt_ids.append(item["utt_id"])
+            words.append(item["word"])
+            variants.append(item["variant"])
+            surface_ipa.append(item["surface_ipa"])
+            canonical_ipa.append(item["canonical_ipa"])
+            ssml.append(item["ssml"])
             if item["durations"] is not None:
                 durations[i, : item["durations"].shape[-1]] = item["durations"]
 
@@ -292,22 +326,40 @@ class PEDTextMelBatchCollate:
             "canonical_phones": canonical_phones,
             "realized_phones": realized_phones,
             "error_ops": error_ops,
+            "utt_ids": utt_ids,
+            "words": words,
+            "variants": variants,
+            "surface_ipa": surface_ipa,
+            "canonical_ipa": canonical_ipa,
+            "ssml": ssml,
             "durations": durations if not torch.eq(durations, 0).all() else None,
         }
 
 
 def parse_jsonl_records(filelist_path: Path) -> list[dict[str, Any]]:
-    """Read PED JSONL records, skipping blank lines."""
-    records = []
-    with Path(filelist_path).open("r", encoding="utf-8") as file:
-        for line_number, line in enumerate(file, start=1):
+    """Read PED manifest records from JSONL or a JSON array, skipping blank lines."""
+    path = Path(filelist_path)
+    manifest_text = path.read_text(encoding="utf-8")
+    if manifest_text.lstrip().startswith("["):
+        records = json.loads(manifest_text)
+        if not isinstance(records, list):
+            raise TypeError(f"PED manifest {path} must contain a JSON array or JSONL records")
+    else:
+        records = []
+        for line_number, line in enumerate(manifest_text.splitlines(), start=1):
             line = line.strip()
             if not line:
                 continue
-            record = json.loads(line)
-            if "wav" not in record:
-                raise KeyError(f"PED JSONL line {line_number} is missing required field: wav")
-            records.append(record)
+            try:
+                records.append(json.loads(line))
+            except json.JSONDecodeError as exc:
+                raise ValueError(f"Invalid JSONL record on line {line_number} of {path}: {exc}") from exc
+
+    for index, record in enumerate(records, start=1):
+        if not isinstance(record, dict):
+            raise TypeError(f"PED manifest record {index} in {path} must be an object")
+        if "wav" not in record:
+            raise KeyError(f"PED manifest record {index} in {path} is missing required field: wav")
     return records
 
 

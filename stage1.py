@@ -12,7 +12,7 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
-from matcha.utils.phone_input import (
+from matcha.phone_input import (
     ARPABET_TO_IPA,
     arpabet_phone_to_ipa,
     cleaned_text_to_ids,
